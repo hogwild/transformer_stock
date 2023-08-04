@@ -125,10 +125,10 @@ class MyDecoderViTBlock(nn.Module):
             nn.Linear(mlp_ratio * hidden_d, hidden_d)
         )
 
-    def forward(self, x, enc_output):
+    def forward(self, x, enc_output, tgt_mask):
         norm1_x = self.norm1(x)
         # print('x shape', x.shape)
-        out = x + self.self_attn(norm1_x, norm1_x, norm1_x, self.tgt_mask)
+        out = x + self.self_attn(norm1_x, norm1_x, norm1_x, tgt_mask)
         norm1_enc_output = self.norm1(enc_output)
         out = out + self.cross_attn(out, norm1_enc_output, norm1_enc_output)
         out = out + self.mlp(self.norm2(out))
@@ -216,9 +216,9 @@ class MyViTAutoEncoder(nn.Module):
         # Getting the classification token only
         # out = out[:, 0]
         # print(tgt_out.shape)
-        slicing = self.mlp(tgt_out)
-
-        return self.visualization(slicing, h_tgt_img)
+        # tgt_slicing = self.mlp(tgt_out)
+        return self.mlp(tgt_out)
+        # return self.visualization(tgt_slicing, h_tgt_img)
     
     def generate_mask(self, tgt_imgs_size, candle_width=3):
         n, c, h, w = tgt_imgs_size
@@ -227,15 +227,15 @@ class MyViTAutoEncoder(nn.Module):
         seq_length = tgt_tokens.size(1)
         self.tgt_mask = (1 - torch.triu(torch.ones(seq_length, seq_length), diagonal=1)).bool()
     
-    def visualization(self, slicing, img_height, candle_width=3, n_chanels=1):
-        n, n_patches, candle_pixels = slicing.shape
-        images = torch.zeros(n, n_chanels, img_height, candle_width*n_patches )
-        for idx, image in enumerate(slicing):
-            for i in range(n_patches-1):
-                patch = torch.reshape(slicing[idx][i], (img_height, candle_width))
-                # print(patch.shape, i)
-                images[idx, :, :, i*candle_width:(i+1)*candle_width] = patch
-        return images
+    # def visualization(self, slicing, img_height, candle_width=3, n_chanels=1):
+    #     n, n_patches, candle_pixels = slicing.shape
+    #     images = torch.zeros(n, n_chanels, img_height, candle_width*n_patches )
+    #     for idx, image in enumerate(slicing):
+    #         for i in range(n_patches-1):
+    #             patch = torch.reshape(slicing[idx][i], (img_height, candle_width))
+    #             # print(patch.shape, i)
+    #             images[idx, :, :, i*candle_width:(i+1)*candle_width] = patch
+    #     return images
         # return src_mask, tgt_mask
 
     # def generate_mask(self, src, tgt):
@@ -359,7 +359,7 @@ if __name__ == '__main__':
     # print(imgs.shape)
     # patches = slicing(imgs, 20, 3)
     # print(patches.shape)
-    symbols = ["601857", "600028"]
+    symbols = ["601857"]
 
     years = range(2008, 2022)
     imgs = []
@@ -403,7 +403,7 @@ if __name__ == '__main__':
             x, y = x.to(device), y.to(device)
             y_hat = model(x, y)
 
-            # y = slicing(y, 5, 3).to(device)
+            y = slicing(y, 5, 3).to(device)
         
             # print("x, y, y_hat shape", x.shape, y.shape, y_hat.shape)
             loss = criterion(y_hat, y)
@@ -415,7 +415,7 @@ if __name__ == '__main__':
             optimizer.step()
 
         print(f"Epoch {epoch + 1}/{N_EPOCHS} loss: {train_loss:.2f}")
-    # y_hat = visualization(y_hat, 32, 3)
+    y_hat = visualization(y_hat, 32, 3)
         # y = visualization(y_slicing, 32, 3)
     save_image(y_hat.cpu(), f"train_output.jpg")
     # Test loop
@@ -429,14 +429,14 @@ if __name__ == '__main__':
             # print(x.shape, y.shape)
             y_hat = model(x, y)
 
-            # y_slicing = slicing(y, 5, 3).to(device)
+            y_slicing = slicing(y, 5, 3).to(device)
 
-            loss = criterion(y_hat, y)
+            loss = criterion(y_hat, y_slicing)
             test_loss += loss.detach().cpu().item() / len(test_loader)
 
             # correct += torch.sum(torch.argmax(y_hat, dim=1) == y).detach().cpu().item()
             # total += len(x)
-        # y_hat = visualization(y_hat, 32, 3)
+        y_hat = visualization(y_hat, 32, 3)
         # y = visualization(y_slicing, 32, 3)
         save_image(y_hat.cpu(), f"test_output.jpg")
         print(f"Test loss: {test_loss:.2f}")
